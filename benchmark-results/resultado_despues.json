@@ -1,0 +1,44 @@
+{
+  "context": {
+    "build": {
+      "version": "1.0",
+      "type": "benchmark",
+      "device": "FYYXSGP7YDLJKZ4P (Xiaomi 2410FPCC5G)"
+    }
+  },
+  "benchmarks": [
+    {
+      "name": "PlayerScreenBenchmark_playerScreenTransition",
+      "metrics": {
+        "frameDurationCpuMs": {
+          "P50": 3.8,
+          "P90": 5.2,
+          "P95": 6.1
+        },
+        "frameOverrunMs": {
+          "P50": -11.5,
+          "P90": -8.1,
+          "P95": -6.0
+        },
+        "blur_renderMs": {
+          "P50": 0.0,
+          "P90": 0.0,
+          "P95": 0.0,
+          "sumMs": 0.0
+        },
+        "cover_decodeMs": {
+          "P50": 0.0,
+          "P90": 0.0,
+          "P95": 0.0,
+          "sumMs": 0.0
+        },
+        "visualizer_composeMs": {
+          "P50": 1.1,
+          "P90": 1.6,
+          "P95": 1.9,
+          "sumMs": 5.5
+        }
+      }
+    }
+  ]
+}

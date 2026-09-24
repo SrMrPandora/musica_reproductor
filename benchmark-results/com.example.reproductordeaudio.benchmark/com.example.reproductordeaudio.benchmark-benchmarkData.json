@@ -1,0 +1,137 @@
+{
+    "context": {
+        "build": {
+            "brand": "POCO",
+            "device": "lake",
+            "fingerprint": "POCO/lake_p_global/lake:16/BP2A.250605.031.A3/OS3.0.306.0.WGTMIXM:user/release-keys",
+            "id": "BP2A.250605.031.A3",
+            "model": "2410FPCC5G",
+            "type": "user",
+            "version": {
+                "codename": "REL",
+                "sdk": 36
+            }
+        },
+        "cpuCoreCount": 8,
+        "cpuLocked": false,
+        "cpuMaxFreqHz": 2000000000,
+        "memTotalBytes": 8037085184,
+        "sustainedPerformanceModeEnabled": false,
+        "artMainlineVersion": 371000140,
+        "osCodenameAbbreviated": "B",
+        "compilationMode": "verify"
+    },
+    "benchmarks": [
+        {
+            "name": "playerScreenTransition",
+            "params": {},
+            "className": "com.example.reproductordeaudio.benchmark.PlayerScreenBenchmark",
+            "totalRunTimeNs": 40843668541,
+            "metrics": {
+                "blur_renderCount": {
+                    "minimum": 0.0,
+                    "maximum": 0.0,
+                    "median": 0.0,
+                    "runs": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "blur_renderSumMs": {
+                    "minimum": 0.0,
+                    "maximum": 0.0,
+                    "median": 0.0,
+                    "runs": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "cover_decodeCount": {
+                    "minimum": 0.0,
+                    "maximum": 0.0,
+                    "median": 0.0,
+                    "runs": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "cover_decodeSumMs": {
+                    "minimum": 0.0,
+                    "maximum": 0.0,
+                    "median": 0.0,
+                    "runs": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "visualizer_composeCount": {
+                    "minimum": 0.0,
+                    "maximum": 0.0,
+                    "median": 0.0,
+                    "runs": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                },
+                "visualizer_composeSumMs": {
+                    "minimum": 0.0,
+                    "maximum": 0.0,
+                    "median": 0.0,
+                    "runs": [
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0,
+                        0.0
+                    ]
+                }
+            },
+            "sampledMetrics": {},
+            "warmupIterations": 0,
+            "repeatIterations": 5,
+            "thermalThrottleSleepSeconds": 0,
+            "profilerOutputs": [
+                {
+                    "type": "PerfettoTrace",
+                    "label": "Trace Iteration 0",
+                    "filename": "PlayerScreenBenchmark_playerScreenTransition_iter000_2026-09-24-06-33-58.perfetto-trace"
+                },
+                {
+                    "type": "PerfettoTrace",
+                    "label": "Trace Iteration 1",
+                    "filename": "PlayerScreenBenchmark_playerScreenTransition_iter001_2026-09-24-06-34-05.perfetto-trace"
+                },
+                {
+                    "type": "PerfettoTrace",
+                    "label": "Trace Iteration 2",
+                    "filename": "PlayerScreenBenchmark_playerScreenTransition_iter002_2026-09-24-06-34-12.perfetto-trace"
+                },
+                {
+                    "type": "PerfettoTrace",
+                    "label": "Trace Iteration 3",
+                    "filename": "PlayerScreenBenchmark_playerScreenTransition_iter003_2026-09-24-06-34-18.perfetto-trace"
+                },
+                {
+                    "type": "PerfettoTrace",
+                    "label": "Trace Iteration 4",
+                    "filename": "PlayerScreenBenchmark_playerScreenTransition_iter004_2026-09-24-06-34-25.perfetto-trace"
+                }
+            ]
+        }
+    ]
+}
