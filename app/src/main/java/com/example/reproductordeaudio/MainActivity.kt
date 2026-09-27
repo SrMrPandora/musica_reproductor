@@ -56,7 +56,7 @@ class MainActivity : ComponentActivity() {
                     composable("home") {
                         HomeScreen(
                             viewModel = homeViewModel,
-                            onOpenPlayer = { navController.navigate("player") }
+                            onSongClick = { navController.navigate("player") }
                         )
                     }
                     composable("player") {

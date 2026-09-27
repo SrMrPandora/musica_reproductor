@@ -12,6 +12,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import com.example.reproductordeaudio.domain.model.Song
+import com.example.reproductordeaudio.ui.theme.LocalDynamicColors
 
 @Composable
 fun SongContextMenu(
@@ -25,24 +26,28 @@ fun SongContextMenu(
 ) {
     if (song == null) return
 
+    val dynamicColors = LocalDynamicColors.current
+
     DropdownMenu(
         expanded = expanded,
-        onDismissRequest = onDismissRequest
+        onDismissRequest = onDismissRequest,
+        containerColor = dynamicColors.surface
     ) {
         DropdownMenuItem(
-            text = { Text("Reproducir") },
-            leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
+            text = { Text("Reproducir", color = dynamicColors.textColor) },
+            leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = dynamicColors.iconTint) },
             onClick = {
                 onPlay()
                 onDismissRequest()
             }
         )
         DropdownMenuItem(
-            text = { Text(if (song.isFavorite) "Quitar de favoritos" else "Agregar a favoritos") },
+            text = { Text(if (song.isFavorite) "Quitar de favoritos" else "Agregar a favoritos", color = dynamicColors.textColor) },
             leadingIcon = {
                 Icon(
                     if (song.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = null
+                    contentDescription = null,
+                    tint = dynamicColors.iconTint
                 )
             },
             onClick = {
@@ -51,16 +56,16 @@ fun SongContextMenu(
             }
         )
         DropdownMenuItem(
-            text = { Text("Agregar a playlist") },
-            leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null) },
+            text = { Text("Agregar a playlist", color = dynamicColors.textColor) },
+            leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, contentDescription = null, tint = dynamicColors.iconTint) },
             onClick = {
                 onAddToPlaylist()
                 onDismissRequest()
             }
         )
         DropdownMenuItem(
-            text = { Text("Eliminar del dispositivo") },
-            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
+            text = { Text("Eliminar del dispositivo", color = dynamicColors.textColor) },
+            leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = dynamicColors.iconTint) },
             onClick = {
                 onDelete()
                 onDismissRequest()

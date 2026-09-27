@@ -45,15 +45,15 @@ class PlayerScreenBenchmark {
                 TraceSectionMetric("visualizer_compose")
             ),
             iterations = 5,
-            startupMode = StartupMode.WARM
+            startupMode = StartupMode.COLD
         ) {
             pressHome()
-            device.executeShellCommand("am start -n com.example.reproductordeaudio/com.example.reproductordeaudio.MainActivity")
+            startActivityAndWait()
 
-            val songItem = device.wait(Until.findObject(By.res("song_item")), 4000L)
-                ?: device.findObject(By.textContains("canción"))
+            val songItem = device.wait(Until.findObject(By.desc("song_item")), 5000L)
+                ?: throw AssertionError("song_item no fue encontrado en la pantalla!")
 
-            songItem?.click()
+            songItem.click()
             device.waitForIdle()
         }
     }

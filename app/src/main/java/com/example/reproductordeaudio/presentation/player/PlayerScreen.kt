@@ -1,5 +1,6 @@
 package com.example.reproductordeaudio.presentation.player
 
+import android.os.Trace
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
@@ -17,7 +18,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -62,22 +62,23 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tracing.Trace
-import androidx.tracing.trace
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.reproductordeaudio.domain.model.RepeatMode
 import com.example.reproductordeaudio.presentation.home.HomeViewModel
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.HazeStyle
+import dev.chrisbanes.haze.hazeEffect
+import dev.chrisbanes.haze.hazeSource
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -98,6 +99,8 @@ fun PlayerScreen(
     var showVolumeHud by remember { mutableStateOf(false) }
     var volumeHudJob by remember { mutableStateOf<Job?>(null) }
     val coroutineScope = rememberCoroutineScope()
+
+    val hazeState = remember { HazeState() }
 
     val heartColor by animateColorAsState(
         targetValue = palette?.heartColor ?: Color(0xFFFF4081),
@@ -124,7 +127,7 @@ fun PlayerScreen(
             .fillMaxSize()
             .background(backgroundColor)
     ) {
-        // Fondo desenfocado pre-renderizado offscreen
+        // Fondo con Haze Effect en tiempo real sobre la carátula original
         Trace.beginSection("blur_render")
         Crossfade(
             targetState = song,
@@ -132,24 +135,43 @@ fun PlayerScreen(
             label = "background_crossfade"
         ) { targetSong ->
             val prepared = viewModel.playbackManager.preloadManager.getPreparedArtwork(targetSong.id)
-            if (prepared?.blurredBitmap != null) {
-                Image(
-                    bitmap = prepared.blurredBitmap.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
-            } else if (!targetSong.artworkUri.isNullOrEmpty()) {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalContext.current)
-                        .data(targetSong.artworkUri)
-                        .memoryCacheKey(targetSong.id.toString())
-                        .diskCacheKey(targetSong.id.toString())
-                        .crossfade(true)
-                        .build(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (prepared?.bitmap != null) {
+                    Image(
+                        bitmap = prepared.bitmap.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .hazeSource(hazeState)
+                    )
+                } else if (!targetSong.artworkUri.isNullOrEmpty()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(targetSong.artworkUri)
+                            .memoryCacheKey(targetSong.id.toString())
+                            .diskCacheKey(targetSong.id.toString())
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .hazeSource(hazeState)
+                    )
+                }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .hazeEffect(
+                            state = hazeState,
+                            style = HazeStyle(
+                                backgroundColor = backgroundColor,
+                                blurRadius = 18.dp,
+                                tint = null
+                            )
+                        )
                 )
             }
         }
@@ -222,10 +244,8 @@ fun PlayerScreen(
 
                 val containerSizePx = with(density) { containerSize.toPx() }
                 val discSizePx = with(density) { discSize.toPx() }
-
-                val outerRadiusPx = containerSizePx / 2f
                 val innerRadiusPx = discSizePx / 2f
-                val maxBarLengthPx = outerRadiusPx - innerRadiusPx
+                val maxBarLengthPx = (containerSizePx - discSizePx) / 2f
 
                 Box(
                     modifier = Modifier.size(containerSize),
@@ -241,22 +261,27 @@ fun PlayerScreen(
                     )
                     Trace.endSection()
 
-                    // Transición "Cambio de Disco" (slide, scale, fade)
+                    // Transición animada de 600 ms para cambio de disco
                     AnimatedContent(
                         targetState = song,
                         transitionSpec = {
                             (slideInHorizontally(
-                                animationSpec = tween(SONG_TRANSITION_DURATION, easing = FastOutSlowInEasing)
-                            ) { fullWidth -> fullWidth / 2 } +
-                                    fadeIn(tween(SONG_TRANSITION_DURATION)) +
-                                    scaleIn(initialScale = 0.85f, animationSpec = tween(SONG_TRANSITION_DURATION))) togetherWith
-                                    (slideOutHorizontally(
-                                        animationSpec = tween(SONG_TRANSITION_DURATION, easing = FastOutSlowInEasing)
-                                    ) { fullWidth -> -fullWidth / 2 } +
-                                            fadeOut(tween(SONG_TRANSITION_DURATION)) +
-                                            scaleOut(targetScale = 0.85f, animationSpec = tween(SONG_TRANSITION_DURATION)))
+                                animationSpec = tween(SONG_TRANSITION_DURATION, easing = FastOutSlowInEasing),
+                                initialOffsetX = { fullWidth -> fullWidth }
+                            ) + fadeIn(animationSpec = tween(SONG_TRANSITION_DURATION)) + scaleIn(
+                                initialScale = 0.8f,
+                                animationSpec = tween(SONG_TRANSITION_DURATION)
+                            )).togetherWith(
+                                slideOutHorizontally(
+                                    animationSpec = tween(SONG_TRANSITION_DURATION, easing = FastOutSlowInEasing),
+                                    targetOffsetX = { fullWidth -> -fullWidth }
+                                ) + fadeOut(animationSpec = tween(SONG_TRANSITION_DURATION)) + scaleOut(
+                                    targetScale = 0.8f,
+                                    animationSpec = tween(SONG_TRANSITION_DURATION)
+                                )
+                            )
                         },
-                        label = "artwork_disc_transition"
+                        label = "disc_transition"
                     ) { targetSong ->
                         RotatingArtworkDisc(
                             artworkUri = targetSong.artworkUri,
@@ -268,132 +293,131 @@ fun PlayerScreen(
                                 showVolumeHud = true
                                 volumeHudJob?.cancel()
                                 volumeHudJob = coroutineScope.launch {
-                                    delay(1500L)
+                                    delay(2000)
                                     showVolumeHud = false
                                 }
                             },
                             size = discSize
                         )
                     }
+                }
+            }
 
-                    // Indicator HUD de Volumen
-                    Column(
+            // Título, Artista y Control de Volumen HUD
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = song.title,
+                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 22.sp),
+                    color = Color.White,
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = song.artist,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.7f),
+                    maxLines = 1
+                )
+
+                // HUD de Volumen flotante
+                AnimatedVisibility(
+                    visible = showVolumeHud,
+                    enter = fadeIn() + slideInVertically(initialOffsetY = { 20 }),
+                    exit = fadeOut() + slideOutVertically(targetOffsetY = { 20 })
+                ) {
+                    Row(
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(top = 12.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                            .padding(top = 12.dp)
+                            .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                            .padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        AnimatedVisibility(
-                            visible = showVolumeHud,
-                            enter = fadeIn(tween(200)),
-                            exit = fadeOut(tween(500))
-                        ) {
-                            val volPercent = (playbackState.volume * 100).toInt()
-                            val icon = when {
-                                volPercent == 0 -> Icons.AutoMirrored.Filled.VolumeOff
-                                volPercent < 50 -> Icons.AutoMirrored.Filled.VolumeDown
-                                else -> Icons.AutoMirrored.Filled.VolumeUp
-                            }
-                            Card(
-                                shape = CircleShape,
-                                colors = CardDefaults.cardColors(containerColor = Color.Black.copy(alpha = 0.8f))
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = "Volumen",
-                                        tint = Color.White,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "$volPercent%",
-                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                                        color = Color.White
-                                    )
-                                }
-                            }
+                        val icon = when {
+                            playbackState.volume == 0f -> Icons.AutoMirrored.Filled.VolumeOff
+                            playbackState.volume < 0.5f -> Icons.AutoMirrored.Filled.VolumeDown
+                            else -> Icons.AutoMirrored.Filled.VolumeUp
                         }
+                        Icon(
+                            imageVector = icon,
+                            contentDescription = "Volumen",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Slider(
+                            value = playbackState.volume,
+                            onValueChange = { newVol ->
+                                viewModel.playbackManager.setVolume(newVol)
+                                showVolumeHud = true
+                                volumeHudJob?.cancel()
+                                volumeHudJob = coroutineScope.launch {
+                                    delay(2000)
+                                    showVolumeHud = false
+                                }
+                            },
+                            valueRange = 0f..1f,
+                            colors = SliderDefaults.colors(
+                                thumbColor = Color.White,
+                                activeTrackColor = visualizerColor,
+                                inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                            ),
+                            modifier = Modifier.width(140.dp)
+                        )
                     }
                 }
             }
 
-            // Información de la canción con animación suave
-            AnimatedContent(
-                targetState = song,
-                transitionSpec = {
-                    (slideInVertically(animationSpec = tween(SONG_TRANSITION_DURATION)) { height -> height / 2 } +
-                            fadeIn(tween(SONG_TRANSITION_DURATION))) togetherWith
-                            (slideOutVertically(animationSpec = tween(SONG_TRANSITION_DURATION)) { height -> -height / 2 } +
-                                    fadeOut(tween(SONG_TRANSITION_DURATION)))
-                },
-                label = "song_info_transition"
-            ) { targetSong ->
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                ) {
-                    Text(
-                        text = targetSong.title,
-                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                        color = Color.White,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = targetSong.artist,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = Color.White.copy(alpha = 0.7f),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // Barra de progreso
+            // Barra de Progreso y Tiempos
             Column(modifier = Modifier.fillMaxWidth()) {
                 Slider(
-                    value = playbackState.currentPosition.toFloat(),
-                    onValueChange = { viewModel.playbackManager.seekTo(it.toLong()) },
-                    valueRange = 0f..(playbackState.duration.coerceAtLeast(1L).toFloat()),
+                    value = if (playbackState.duration > 0) {
+                        (playbackState.currentPosition.toFloat() / playbackState.duration.toFloat()).coerceIn(0f, 1f)
+                    } else 0f,
+                    onValueChange = { fraction ->
+                        val targetMs = (fraction * playbackState.duration).toLong()
+                        viewModel.playbackManager.seekTo(targetMs)
+                    },
                     colors = SliderDefaults.colors(
-                        thumbColor = heartColor,
-                        activeTrackColor = heartColor,
-                        inactiveTrackColor = Color.White.copy(alpha = 0.24f)
-                    )
+                        thumbColor = Color.White,
+                        activeTrackColor = visualizerColor,
+                        inactiveTrackColor = Color.White.copy(alpha = 0.3f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
                 )
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
                         text = formatTime(playbackState.currentPosition),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.7f)
                     )
                     Text(
                         text = formatTime(playbackState.duration),
-                        style = MaterialTheme.typography.bodySmall,
+                        style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.7f)
                     )
                 }
             }
 
-            // Controles de Reproducción
+            // Controles Principales de Reproducción
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 12.dp),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 IconButton(onClick = { viewModel.playbackManager.toggleShuffle() }) {
                     Icon(
                         imageVector = Icons.Default.Shuffle,
-                        contentDescription = "Shuffle",
-                        tint = if (playbackState.isShuffleEnabled) heartColor else Color.White.copy(alpha = 0.5f)
+                        contentDescription = "Aleatorio",
+                        tint = if (playbackState.isShuffleEnabled) visualizerColor else Color.White.copy(alpha = 0.5f)
                     )
                 }
 
@@ -406,13 +430,16 @@ fun PlayerScreen(
                     )
                 }
 
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .background(heartColor, CircleShape),
-                    contentAlignment = Alignment.Center
+                Card(
+                    onClick = { viewModel.playbackManager.playOrPause() },
+                    shape = CircleShape,
+                    colors = CardDefaults.cardColors(containerColor = visualizerColor),
+                    modifier = Modifier.size(64.dp)
                 ) {
-                    IconButton(onClick = { viewModel.playbackManager.playOrPause() }) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
                         Icon(
                             imageVector = if (playbackState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                             contentDescription = if (playbackState.isPlaying) "Pausar" else "Reproducir",
@@ -432,13 +459,11 @@ fun PlayerScreen(
                 }
 
                 IconButton(onClick = { viewModel.playbackManager.toggleRepeat() }) {
+                    val repeatIcon = if (playbackState.repeatMode == RepeatMode.ONE) Icons.Default.RepeatOne else Icons.Default.Repeat
                     Icon(
-                        imageVector = when (playbackState.repeatMode) {
-                            RepeatMode.ONE -> Icons.Default.RepeatOne
-                            else -> Icons.Default.Repeat
-                        },
+                        imageVector = repeatIcon,
                         contentDescription = "Repetir",
-                        tint = if (playbackState.repeatMode != RepeatMode.OFF) heartColor else Color.White.copy(alpha = 0.5f)
+                        tint = if (playbackState.repeatMode != RepeatMode.OFF) visualizerColor else Color.White.copy(alpha = 0.5f)
                     )
                 }
             }
@@ -446,9 +471,9 @@ fun PlayerScreen(
     }
 }
 
-private fun formatTime(timeMs: Long): String {
-    val totalSeconds = timeMs / 1000
+private fun formatTime(ms: Long): String {
+    val totalSeconds = (ms / 1000).coerceAtLeast(0)
     val minutes = totalSeconds / 60
     val seconds = totalSeconds % 60
-    return String.format("%02d:%02d", minutes, seconds)
+    return String.format("%d:%02d", minutes, seconds)
 }

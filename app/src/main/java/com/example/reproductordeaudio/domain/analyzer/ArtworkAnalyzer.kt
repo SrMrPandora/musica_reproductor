@@ -19,6 +19,11 @@ data class ArtworkPalette(
     val backgroundColor: Color
 )
 
+data class CardIdentity(
+    val gradientColors: List<Color>,
+    val textColor: Color
+)
+
 class ArtworkAnalyzer(private val context: Context) {
 
     private val paletteCache = mutableMapOf<String, ArtworkPalette>()
@@ -54,7 +59,37 @@ class ArtworkAnalyzer(private val context: Context) {
         artworkPalette
     }
 
-    private fun loadBitmapFromUri(uriString: String): Bitmap? {
+    suspend fun extractCardIdentity(bitmap: Bitmap): CardIdentity = withContext(Dispatchers.Default) {
+        val palette = Palette.from(bitmap).generate()
+        val topSwatches = palette.swatches
+            .sortedByDescending { it.population }
+            .take(5)
+
+        val swatches = if (topSwatches.isEmpty()) {
+            listOf(Color(0xFF212121), Color(0xFF121212))
+        } else {
+            topSwatches
+                .map { Color(it.rgb) }
+                .sortedBy { ColorUtils.calculateLuminance(it.toArgb()) }
+        }
+
+        val gradientColors = if (swatches.size == 1) {
+            listOf(swatches.first(), swatches.first())
+        } else {
+            swatches
+        }
+
+        val lastColorArgb = gradientColors.last().toArgb()
+        val whiteContrast = ColorUtils.calculateContrast(Color.White.toArgb(), lastColorArgb)
+        val textColor = if (whiteContrast >= 3.0) Color.White else Color.Black
+
+        CardIdentity(
+            gradientColors = gradientColors,
+            textColor = textColor
+        )
+    }
+
+    fun loadBitmapFromUri(uriString: String): Bitmap? {
         val uri = Uri.parse(uriString)
         val retriever = MediaMetadataRetriever()
         try {

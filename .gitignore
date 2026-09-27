@@ -1,5 +1,8 @@
 *.iml
-.gradle
+.gradle/
+.artifacts/
+.agent/
+.agents/
 /local.properties
 /.idea/caches
 /.idea/libraries
@@ -8,11 +11,14 @@
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
 .DS_Store
-/build
+build/
+**/build/
 /captures
 .externalNativeBuild
 .cxx
 local.properties
+*.apk
+*.dex
 
 # Ignore large binary trace files from Macrobenchmark, keep benchmark-results JSONs
 *.perfetto-trace

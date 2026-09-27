@@ -1,7 +1,9 @@
 package com.example.reproductordeaudio.domain.model
 
+import androidx.compose.runtime.Immutable
 import com.example.reproductordeaudio.data.local.db.SongEntity
 
+@Immutable
 data class Song(
     val id: Long,
     val title: String,

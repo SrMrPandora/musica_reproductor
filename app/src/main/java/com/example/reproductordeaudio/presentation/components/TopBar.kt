@@ -14,6 +14,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.font.FontWeight
+import com.example.reproductordeaudio.ui.theme.LocalDynamicColors
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -25,11 +26,14 @@ fun TopBar(
     onSphereToggleClick: (() -> Unit)? = null,
     isSphereEffectEnabled: Boolean = true
 ) {
+    val dynamicColors = LocalDynamicColors.current
+
     TopAppBar(
         title = {
             Text(
                 text = title,
-                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold)
+                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                color = dynamicColors.textColor
             )
         },
         actions = {
@@ -38,7 +42,7 @@ fun TopBar(
                     Icon(
                         imageVector = Icons.Default.Public,
                         contentDescription = "Efecto 3D Esfera",
-                        tint = if (isSphereEffectEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+                        tint = if (isSphereEffectEnabled) dynamicColors.highlight else dynamicColors.textColor.copy(alpha = 0.38f)
                     )
                 }
             }
@@ -46,7 +50,8 @@ fun TopBar(
                 IconButton(onClick = onShuffleClick) {
                     Icon(
                         imageVector = Icons.Default.Shuffle,
-                        contentDescription = "Shuffle"
+                        contentDescription = "Shuffle",
+                        tint = dynamicColors.iconTint
                     )
                 }
             }
@@ -54,20 +59,22 @@ fun TopBar(
                 IconButton(onClick = onSortClick) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.Sort,
-                        contentDescription = "Ordenar"
+                        contentDescription = "Ordenar",
+                        tint = dynamicColors.iconTint
                     )
                 }
             }
             IconButton(onClick = onSyncClick) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
-                    contentDescription = "Actualizar Biblioteca"
+                    contentDescription = "Actualizar Biblioteca",
+                    tint = dynamicColors.iconTint
                 )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.background,
-            titleContentColor = MaterialTheme.colorScheme.onBackground
+            containerColor = dynamicColors.background,
+            titleContentColor = dynamicColors.textColor
         )
     )
 }

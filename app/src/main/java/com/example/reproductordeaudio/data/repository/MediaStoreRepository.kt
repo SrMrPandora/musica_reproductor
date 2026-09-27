@@ -20,15 +20,20 @@ class MediaStoreRepository(private val context: Context) {
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         }
 
-        val projection = arrayOf(
+        val projection = mutableListOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.DURATION,
-            MediaStore.Audio.Media.DATE_MODIFIED
-        )
+            MediaStore.Audio.Media.DATE_MODIFIED,
+            MediaStore.Audio.Media.DATA
+        ).apply {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                add(MediaStore.Audio.Media.RELATIVE_PATH)
+            }
+        }.toTypedArray()
 
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND ${MediaStore.Audio.Media.DURATION} >= 10000"
 
@@ -46,10 +51,28 @@ class MediaStoreRepository(private val context: Context) {
             val albumIdColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
             val durationColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val dateModifiedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+            val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+            val relativePathColumn = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                cursor.getColumnIndex(MediaStore.Audio.Media.RELATIVE_PATH)
+            } else -1
 
             while (cursor.moveToNext()) {
-                val id = cursor.getLong(idColumn)
+                val filePath = cursor.getString(dataColumn) ?: ""
+                val relativePath = if (relativePathColumn != -1) cursor.getString(relativePathColumn) ?: "" else ""
                 val title = cursor.getString(titleColumn) ?: "Unknown Title"
+
+                val isWhatsAppVoiceNote = filePath.contains("WhatsApp Voice Notes", ignoreCase = true) ||
+                        relativePath.contains("WhatsApp Voice Notes", ignoreCase = true) ||
+                        filePath.contains("WhatsApp Audio", ignoreCase = true)
+
+                val isOpusFormat = filePath.endsWith(".opus", ignoreCase = true) ||
+                        title.endsWith(".opus", ignoreCase = true)
+
+                if (isWhatsAppVoiceNote || isOpusFormat) {
+                    continue
+                }
+
+                val id = cursor.getLong(idColumn)
                 val artist = cursor.getString(artistColumn) ?: "Unknown Artist"
                 val album = cursor.getString(albumColumn)
                 val albumId = cursor.getLong(albumIdColumn)
