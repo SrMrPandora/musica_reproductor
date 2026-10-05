@@ -19,6 +19,9 @@ import com.example.reproductordeaudio.domain.model.Song
 import com.example.reproductordeaudio.domain.model.normalizeArtistName
 import com.example.reproductordeaudio.domain.model.toDomain
 import com.example.reproductordeaudio.domain.sync.LibrarySyncManager
+import com.example.reproductordeaudio.BuildConfig
+import com.example.reproductordeaudio.data.updater.UpdateChecker
+import com.example.reproductordeaudio.domain.updater.AppUpdateInfo
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -93,6 +96,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _shouldScrollToCurrentSong = MutableStateFlow(false)
     val shouldScrollToCurrentSong: StateFlow<Boolean> = _shouldScrollToCurrentSong.asStateFlow()
+
+    private val _availableUpdate = MutableStateFlow<AppUpdateInfo?>(null)
+    val availableUpdate: StateFlow<AppUpdateInfo?> = _availableUpdate.asStateFlow()
+
+    init {
+        checkUpdates()
+    }
+
+    fun checkUpdates() {
+        viewModelScope.launch {
+            val update = UpdateChecker.checkForUpdate(BuildConfig.VERSION_NAME)
+            _availableUpdate.value = update
+        }
+    }
+
+    fun dismissUpdate() {
+        _availableUpdate.value = null
+    }
 
     @OptIn(FlowPreview::class)
     private val _debouncedSearchQuery = _searchQuery

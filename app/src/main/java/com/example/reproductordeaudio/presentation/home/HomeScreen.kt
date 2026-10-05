@@ -76,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.reproductordeaudio.data.local.db.CardIdentityEntity
+import com.example.reproductordeaudio.data.updater.ApkInstaller
 import com.example.reproductordeaudio.domain.model.Artist
 import com.example.reproductordeaudio.domain.model.Playlist
 import com.example.reproductordeaudio.domain.model.Song
@@ -107,6 +108,7 @@ fun HomeScreen(
     val playbackState by viewModel.playbackManager.playbackState.collectAsStateWithLifecycle()
     val cardIdentities by viewModel.cardIdentities.collectAsStateWithLifecycle()
     val shouldScrollToCurrentSong by viewModel.shouldScrollToCurrentSong.collectAsStateWithLifecycle()
+    val updateInfo by viewModel.availableUpdate.collectAsStateWithLifecycle()
 
     var selectedSongForMenu by remember { mutableStateOf<Song?>(null) }
     var selectedArtistDetail by remember { mutableStateOf<Artist?>(null) }
@@ -342,6 +344,51 @@ fun HomeScreen(
                                 viewModel.createPlaylist(name)
                                 Toast.makeText(context, "Playlist \"$name\" creada", Toast.LENGTH_SHORT).show()
                                 songForAddToPlaylist = null
+                            }
+                        )
+                    }
+
+                    if (updateInfo != null) {
+                        val context = LocalContext.current
+                        AlertDialog(
+                            onDismissRequest = { viewModel.dismissUpdate() },
+                            containerColor = dynamicColors.surface,
+                            title = {
+                                Text("Nueva versión disponible", color = dynamicColors.textColor, style = MaterialTheme.typography.titleLarge)
+                            },
+                            text = {
+                                Column {
+                                    Text(
+                                        "La versión ${updateInfo!!.version} está disponible para descargar.",
+                                        color = dynamicColors.textColor,
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    if (updateInfo!!.releaseNotes.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Text(
+                                            updateInfo!!.releaseNotes,
+                                            color = dynamicColors.textColor.copy(alpha = 0.7f),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            maxLines = 4
+                                        )
+                                    }
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(
+                                    onClick = {
+                                        val info = updateInfo!!
+                                        viewModel.dismissUpdate()
+                                        ApkInstaller.downloadAndInstallApk(context, info.downloadUrl, "reproductor-v${info.version}.apk")
+                                    }
+                                ) {
+                                    Text("Actualizar", color = dynamicColors.accent)
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { viewModel.dismissUpdate() }) {
+                                    Text("Después", color = dynamicColors.textColor.copy(alpha = 0.7f))
+                                }
                             }
                         )
                     }
