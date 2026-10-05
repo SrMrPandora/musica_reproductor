@@ -71,6 +71,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.activity.compose.BackHandler
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.example.reproductordeaudio.domain.model.RepeatMode
@@ -90,6 +91,11 @@ fun PlayerScreen(
     viewModel: HomeViewModel,
     onBackClick: () -> Unit
 ) {
+    BackHandler {
+        viewModel.triggerScrollToCurrentSong()
+        onBackClick()
+    }
+
     val playbackState by viewModel.playbackManager.playbackState.collectAsState()
     val palette by viewModel.playbackManager.currentPalette.collectAsState()
     val amplitudes by viewModel.playbackManager.visualizerAmplitudes.collectAsState()
@@ -130,11 +136,12 @@ fun PlayerScreen(
         // Fondo con Haze Effect en tiempo real sobre la carátula original
         Trace.beginSection("blur_render")
         Crossfade(
-            targetState = song,
+            targetState = song.id,
             animationSpec = tween(SONG_TRANSITION_DURATION),
             label = "background_crossfade"
-        ) { targetSong ->
-            val prepared = viewModel.playbackManager.preloadManager.getPreparedArtwork(targetSong.id)
+        ) { targetSongId ->
+            val targetSong = playbackState.currentSong ?: song
+            val prepared = viewModel.playbackManager.preloadManager.getPreparedArtwork(targetSongId)
             Box(modifier = Modifier.fillMaxSize()) {
                 if (prepared?.bitmap != null) {
                     Image(
@@ -149,8 +156,8 @@ fun PlayerScreen(
                     AsyncImage(
                         model = ImageRequest.Builder(LocalContext.current)
                             .data(targetSong.artworkUri)
-                            .memoryCacheKey(targetSong.id.toString())
-                            .diskCacheKey(targetSong.id.toString())
+                            .memoryCacheKey(targetSongId.toString())
+                            .diskCacheKey(targetSongId.toString())
                             .crossfade(true)
                             .build(),
                         contentDescription = null,
@@ -263,18 +270,32 @@ fun PlayerScreen(
 
                     // Transición animada de 600 ms para cambio de disco
                     AnimatedContent(
-                        targetState = song,
+                        targetState = song.id,
                         transitionSpec = {
+                            val queueSize = viewModel.playbackManager.getQueueSize()
+                            val initialIndex = viewModel.playbackManager.getSongIndex(initialState)
+                            val targetIndex = viewModel.playbackManager.getSongIndex(targetState)
+
+                            val isForward = when {
+                                initialIndex == -1 || targetIndex == -1 -> true
+                                queueSize > 1 && initialIndex == queueSize - 1 && targetIndex == 0 -> true
+                                queueSize > 1 && initialIndex == 0 && targetIndex == queueSize - 1 -> false
+                                else -> targetIndex >= initialIndex
+                            }
+
+                            val slideInFrom = if (isForward) { fullWidth: Int -> fullWidth } else { fullWidth: Int -> -fullWidth }
+                            val slideOutTo = if (isForward) { fullWidth: Int -> -fullWidth } else { fullWidth: Int -> fullWidth }
+
                             (slideInHorizontally(
                                 animationSpec = tween(SONG_TRANSITION_DURATION, easing = FastOutSlowInEasing),
-                                initialOffsetX = { fullWidth -> fullWidth }
+                                initialOffsetX = slideInFrom
                             ) + fadeIn(animationSpec = tween(SONG_TRANSITION_DURATION)) + scaleIn(
                                 initialScale = 0.8f,
                                 animationSpec = tween(SONG_TRANSITION_DURATION)
                             )).togetherWith(
                                 slideOutHorizontally(
                                     animationSpec = tween(SONG_TRANSITION_DURATION, easing = FastOutSlowInEasing),
-                                    targetOffsetX = { fullWidth -> -fullWidth }
+                                    targetOffsetX = slideOutTo
                                 ) + fadeOut(animationSpec = tween(SONG_TRANSITION_DURATION)) + scaleOut(
                                     targetScale = 0.8f,
                                     animationSpec = tween(SONG_TRANSITION_DURATION)
@@ -282,10 +303,11 @@ fun PlayerScreen(
                             )
                         },
                         label = "disc_transition"
-                    ) { targetSong ->
+                    ) { targetSongId ->
+                        val targetSong = playbackState.currentSong ?: song
                         RotatingArtworkDisc(
                             artworkUri = targetSong.artworkUri,
-                            songId = targetSong.id,
+                            songId = targetSongId,
                             isPlaying = playbackState.isPlaying,
                             onVolumeDrag = { delta ->
                                 val newVol = (playbackState.volume + delta).coerceIn(0f, 1f)

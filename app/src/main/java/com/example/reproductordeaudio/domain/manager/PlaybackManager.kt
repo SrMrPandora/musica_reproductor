@@ -102,12 +102,7 @@ class PlaybackManager(
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val mediaId = mediaItem?.mediaId?.toLongOrNull()
-                val activeSong = if (mediaId != null) {
-                    originalQueue.find { it.id == mediaId } ?: currentQueue.find { it.id == mediaId }
-                } else {
-                    val idx = p.currentMediaItemIndex
-                    currentQueue.getOrNull(idx)
-                }
+                val activeSong = findSongInQueue(mediaId, p.currentMediaItemIndex)
 
                 if (activeSong != null) {
                     observeCurrentSongInRoom(activeSong.id)
@@ -130,17 +125,22 @@ class PlaybackManager(
         })
     }
 
+    private fun findSongInQueue(mediaId: Long?, fallbackIndex: Int): Song? {
+        if (mediaId != null) {
+            return originalQueue.find { it.id == mediaId } ?: currentQueue.find { it.id == mediaId }
+        }
+        return currentQueue.getOrNull(fallbackIndex)
+    }
+
     private fun observeCurrentSongInRoom(songId: Long) {
         songObserverJob?.cancel()
         songObserverJob = scope.launch {
             roomRepository.getSongFlowById(songId).collect { entity ->
-                if (entity != null) {
-                    val updatedSong = entity.toDomain()
-                    _playbackState.update { currentState ->
-                        currentState.copy(currentSong = updatedSong)
-                    }
-                    analyzeCurrentArtwork(updatedSong)
+                val updatedSong = entity?.toDomain() ?: return@collect
+                _playbackState.update { currentState ->
+                    currentState.copy(currentSong = updatedSong)
                 }
+                analyzeCurrentArtwork(updatedSong)
             }
         }
     }
@@ -153,20 +153,7 @@ class PlaybackManager(
         currentQueue = songs.toMutableList()
 
         val validIndex = startIndex.coerceIn(0, songs.lastIndex)
-
-        val mediaItems = songs.map { song ->
-            MediaItem.Builder()
-                .setUri(Uri.parse(song.uri))
-                .setMediaId(song.id.toString())
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(song.title)
-                        .setArtist(song.artist)
-                        .setAlbumTitle(song.album)
-                        .setArtworkUri(song.artworkUri?.let { Uri.parse(it) })
-                        .build()
-                ).build()
-        }
+        val mediaItems = songs.map { it.toMediaItem() }
 
         p.setMediaItems(mediaItems, validIndex, 0L)
         p.shuffleModeEnabled = _playbackState.value.isShuffleEnabled
@@ -220,17 +207,9 @@ class PlaybackManager(
 
     fun toggleRepeat() {
         val p = player ?: return
-        val nextMode = when (_playbackState.value.repeatMode) {
-            RepeatMode.OFF -> RepeatMode.ALL
-            RepeatMode.ALL -> RepeatMode.ONE
-            RepeatMode.ONE -> RepeatMode.OFF
-        }
+        val nextMode = _playbackState.value.repeatMode.next()
         _playbackState.update { it.copy(repeatMode = nextMode) }
-        p.repeatMode = when (nextMode) {
-            RepeatMode.OFF -> Player.REPEAT_MODE_OFF
-            RepeatMode.ALL -> Player.REPEAT_MODE_ALL
-            RepeatMode.ONE -> Player.REPEAT_MODE_ONE
-        }
+        p.repeatMode = nextMode.toPlayerRepeatMode()
     }
 
     fun setVolume(volume: Float) {
@@ -270,11 +249,9 @@ class PlaybackManager(
 
                 playedTimeMs += 1000L
                 val currentSong = _playbackState.value.currentSong
-                if (currentSong != null && !hasRecordedHistory) {
-                    if (historyManager.shouldRecordHistory(playedTimeMs, dur)) {
-                        hasRecordedHistory = true
-                        historyManager.recordPlayback(currentSong.id)
-                    }
+                if (currentSong != null && !hasRecordedHistory && historyManager.shouldRecordHistory(playedTimeMs, dur)) {
+                    hasRecordedHistory = true
+                    historyManager.recordPlayback(currentSong.id)
                 }
 
                 delay(1000L)
@@ -323,10 +300,44 @@ class PlaybackManager(
         }
     }
 
+    fun getSongIndex(songId: Long): Int {
+        val indexInCurrent = currentQueue.indexOfFirst { it.id == songId }
+        if (indexInCurrent != -1) return indexInCurrent
+        return originalQueue.indexOfFirst { it.id == songId }
+    }
+
+    fun getQueueSize(): Int = currentQueue.size.coerceAtLeast(originalQueue.size)
+
     fun release() {
         stopProgressTracker()
         songObserverJob?.cancel()
         visualizerProcessor.release()
         MediaController.releaseFuture(mediaControllerFuture)
     }
+}
+
+private fun Song.toMediaItem(): MediaItem {
+    return MediaItem.Builder()
+        .setUri(Uri.parse(uri))
+        .setMediaId(id.toString())
+        .setMediaMetadata(
+            MediaMetadata.Builder()
+                .setTitle(title)
+                .setArtist(artist)
+                .setAlbumTitle(album)
+                .setArtworkUri(artworkUri?.let { Uri.parse(it) })
+                .build()
+        ).build()
+}
+
+private fun RepeatMode.next(): RepeatMode = when (this) {
+    RepeatMode.OFF -> RepeatMode.ALL
+    RepeatMode.ALL -> RepeatMode.ONE
+    RepeatMode.ONE -> RepeatMode.OFF
+}
+
+private fun RepeatMode.toPlayerRepeatMode(): Int = when (this) {
+    RepeatMode.OFF -> Player.REPEAT_MODE_OFF
+    RepeatMode.ALL -> Player.REPEAT_MODE_ALL
+    RepeatMode.ONE -> Player.REPEAT_MODE_ONE
 }

@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.Normalizer
+import kotlin.random.Random
 
 enum class SortOption {
     A_Z, Z_A, MOST_PLAYED, LEAST_PLAYED
@@ -90,6 +91,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _searchQuery = MutableStateFlow("")
     val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
 
+    private val _shouldScrollToCurrentSong = MutableStateFlow(false)
+    val shouldScrollToCurrentSong: StateFlow<Boolean> = _shouldScrollToCurrentSong.asStateFlow()
+
     @OptIn(FlowPreview::class)
     private val _debouncedSearchQuery = _searchQuery
         .debounce(200L)
@@ -147,6 +151,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun syncLibrary() {
+        if (_isLoading.value) return
         viewModelScope.launch {
             _isLoading.value = true
             try {
@@ -157,6 +162,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 _isLoading.value = false
             }
         }
+    }
+
+    fun triggerScrollToCurrentSong() {
+        _shouldScrollToCurrentSong.value = true
+    }
+
+    fun onScrollToCurrentSongHandled() {
+        _shouldScrollToCurrentSong.value = false
+    }
+
+    fun getRandomWeightedSong(): Song? {
+        val songs = uiState.value.songs
+        if (songs.isEmpty()) return null
+
+        val weights = songs.map { 1.0 / (it.playCount + 1.0) }
+        val totalWeight = weights.sum()
+        val randomValue = Random.nextDouble() * totalWeight
+
+        var cumulative = 0.0
+        for (i in songs.indices) {
+            cumulative += weights[i]
+            if (randomValue <= cumulative) {
+                return songs[i]
+            }
+        }
+        return songs.last()
     }
 
     fun updateSearchQuery(query: String) {
@@ -203,13 +234,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun getSongsForPlaylist(playlistId: Long): Flow<List<Song>> {
+        return playlistManager.getSongsForPlaylist(playlistId)
+    }
+
     fun deleteSongFromDevice(songId: Long) {
         viewModelScope.launch {
-            val song = roomRepository.getSongById(songId)
-            if (song != null) {
-                mediaStoreRepository.deleteAudioFilePhysical(song.uri)
-                roomRepository.deleteSong(songId)
-            }
+            val song = roomRepository.getSongById(songId) ?: return@launch
+            mediaStoreRepository.deleteAudioFilePhysical(song.uri)
+            roomRepository.deleteSong(songId)
         }
     }
 
@@ -219,26 +252,15 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         val normalizedQuery = query.stripAccents()
 
-        val prefixMatches = mutableListOf<Song>()
-        val containsMatches = mutableListOf<Song>()
-
-        for (song in sorted) {
-            val normTitle = song.title.stripAccents()
-            val normArtist = song.artist.stripAccents()
-
-            if (normTitle.startsWith(normalizedQuery)) {
-                prefixMatches.add(song)
-            } else if (normTitle.contains(normalizedQuery) || normArtist.contains(normalizedQuery)) {
-                containsMatches.add(song)
-            }
+        val (prefixMatches, otherSongs) = sorted.partition { song ->
+            song.title.stripAccents().startsWith(normalizedQuery)
+        }
+        val containsMatches = otherSongs.filter { song ->
+            song.title.stripAccents().contains(normalizedQuery) ||
+                song.artist.stripAccents().contains(normalizedQuery)
         }
 
         return prefixMatches + containsMatches
-    }
-
-    private fun String.stripAccents(): String {
-        val normalized = Normalizer.normalize(this, Normalizer.Form.NFD)
-        return normalized.replace("\\p{InCombiningDiacriticalMarks}+".toRegex(), "").lowercase()
     }
 
     private fun applySort(songs: List<Song>, sort: SortOption): List<Song> {
@@ -251,15 +273,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun groupArtists(songs: List<Song>): List<Artist> {
-        val grouped = songs.groupBy { it.artist.normalizeArtistName() }
-        return grouped.map { (_, artistSongs) ->
-            val firstSong = artistSongs.first()
-            Artist(
-                name = firstSong.artist,
-                normalizedName = firstSong.artist.normalizeArtistName(),
-                songCount = artistSongs.size,
-                songs = artistSongs
-            )
-        }.sortedBy { it.name.lowercase() }
+        return songs.groupBy { it.artist.normalizeArtistName() }
+            .map { (normalizedName, artistSongs) ->
+                Artist(
+                    name = artistSongs.first().artist,
+                    normalizedName = normalizedName,
+                    songCount = artistSongs.size,
+                    songs = artistSongs
+                )
+            }
+            .sortedBy { it.name.lowercase() }
     }
+}
+
+private val ACCENTS_REGEX = "\\p{InCombiningDiacriticalMarks}+".toRegex()
+
+private fun String.stripAccents(): String {
+    val normalized = Normalizer.normalize(this, Normalizer.Form.NFD)
+    return normalized.replace(ACCENTS_REGEX, "").lowercase()
 }

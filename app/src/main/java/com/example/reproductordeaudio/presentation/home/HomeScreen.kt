@@ -1,5 +1,6 @@
 package com.example.reproductordeaudio.presentation.home
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -27,6 +29,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Pause
@@ -34,14 +37,18 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -76,6 +83,7 @@ import com.example.reproductordeaudio.presentation.components.DefaultArtwork
 import com.example.reproductordeaudio.presentation.components.SongCard
 import com.example.reproductordeaudio.presentation.components.SongContextMenu
 import com.example.reproductordeaudio.presentation.components.TopBar
+import com.example.reproductordeaudio.ui.theme.DynamicColorScheme
 import com.example.reproductordeaudio.ui.theme.LocalDynamicColors
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -83,6 +91,7 @@ import androidx.compose.material3.ScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import com.example.reproductordeaudio.ui.theme.ProvideDynamicColors
@@ -97,10 +106,13 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playbackState by viewModel.playbackManager.playbackState.collectAsStateWithLifecycle()
     val cardIdentities by viewModel.cardIdentities.collectAsStateWithLifecycle()
+    val shouldScrollToCurrentSong by viewModel.shouldScrollToCurrentSong.collectAsStateWithLifecycle()
 
     var selectedSongForMenu by remember { mutableStateOf<Song?>(null) }
     var selectedArtistDetail by remember { mutableStateOf<Artist?>(null) }
+    var selectedPlaylistDetail by remember { mutableStateOf<Playlist?>(null) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var songForAddToPlaylist by remember { mutableStateOf<Song?>(null) }
 
     val pagerState = rememberPagerState(initialPage = uiState.selectedTab) { 5 }
     val coroutineScope = rememberCoroutineScope()
@@ -142,44 +154,30 @@ fun HomeScreen(
                         title = currentTitle,
                         onSyncClick = { viewModel.syncLibrary() },
                         onSortClick = { showSortMenu = true },
+                        onShuffleClick = {
+                            val randomSong = viewModel.getRandomWeightedSong()
+                            if (randomSong != null) {
+                                val songs = uiState.songs
+                                val index = songs.indexOfFirst { it.id == randomSong.id }
+                                viewModel.playbackManager.setQueue(songs, if (index != -1) index else 0)
+                                onSongClick()
+                            }
+                        },
                         onSphereToggleClick = { viewModel.toggleSphereEffect() },
-                        isSphereEffectEnabled = uiState.isSphereEffectEnabled
+                        isSphereEffectEnabled = uiState.isSphereEffectEnabled,
+                        isSyncing = uiState.isLoading
                     )
 
-                    DropdownMenu(
+                    HomeSortDropdownMenu(
                         expanded = showSortMenu,
                         onDismissRequest = { showSortMenu = false },
-                        containerColor = dynamicColors.surface
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text("A - Z", color = dynamicColors.textColor) },
-                            onClick = {
-                                viewModel.setSortOption(SortOption.A_Z)
-                                showSortMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Z - A", color = dynamicColors.textColor) },
-                            onClick = {
-                                viewModel.setSortOption(SortOption.Z_A)
-                                showSortMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Más escuchadas", color = dynamicColors.textColor) },
-                            onClick = {
-                                viewModel.setSortOption(SortOption.MOST_PLAYED)
-                                showSortMenu = false
-                            }
-                        )
-                        DropdownMenuItem(
-                            text = { Text("Menos escuchadas", color = dynamicColors.textColor) },
-                            onClick = {
-                                viewModel.setSortOption(SortOption.LEAST_PLAYED)
-                                showSortMenu = false
-                            }
-                        )
-                    }
+                        onSortOptionSelected = { option ->
+                            viewModel.setSortOption(option)
+                            showSortMenu = false
+                        },
+                        containerColor = dynamicColors.surface,
+                        textColor = dynamicColors.textColor
+                    )
                 }
             },
             bottomBar = {
@@ -205,82 +203,21 @@ fun HomeScreen(
                     .fillMaxSize()
                     .padding(padding)
             ) {
-                TextField(
-                    value = uiState.searchQuery,
-                    onValueChange = { viewModel.updateSearchQuery(it) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    placeholder = { Text("Buscar canción o artista...", color = dynamicColors.textColor.copy(alpha = 0.6f)) },
-                    leadingIcon = {
-                        Icon(imageVector = Icons.Default.Search, contentDescription = "Buscar", tint = dynamicColors.iconTint)
-                    },
-                    trailingIcon = {
-                        AnimatedVisibility(
-                            visible = uiState.searchQuery.isNotEmpty(),
-                            enter = fadeIn() + scaleIn(),
-                            exit = fadeOut() + scaleOut()
-                        ) {
-                            IconButton(
-                                onClick = { viewModel.updateSearchQuery("") },
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Clear,
-                                    contentDescription = "Limpiar búsqueda",
-                                    tint = dynamicColors.iconTint
-                                )
-                            }
-                        }
-                    },
-                    singleLine = true,
-                    shape = CircleShape,
-                    colors = TextFieldDefaults.colors(
-                        focusedContainerColor = dynamicColors.surface.copy(alpha = 0.5f),
-                        unfocusedContainerColor = dynamicColors.surface.copy(alpha = 0.3f),
-                        disabledContainerColor = dynamicColors.surface.copy(alpha = 0.2f),
-                        focusedIndicatorColor = Color.Transparent,
-                        unfocusedIndicatorColor = Color.Transparent,
-                        disabledIndicatorColor = Color.Transparent,
-                        focusedTextColor = dynamicColors.textColor,
-                        unfocusedTextColor = dynamicColors.textColor
-                    )
+                HomeSearchBar(
+                    searchQuery = uiState.searchQuery,
+                    onSearchQueryChange = { viewModel.updateSearchQuery(it) },
+                    dynamicColors = dynamicColors
                 )
 
-                val tabTitles = listOf("Canciones", "Favoritos", "Recientes", "Playlists", "Artistas")
-
-                ScrollableTabRow(
-                    selectedTabIndex = pagerState.currentPage,
-                    containerColor = Color.Transparent,
-                    contentColor = dynamicColors.textColor,
-                    edgePadding = 16.dp,
-                    indicator = { tabPositions ->
-                        if (pagerState.currentPage < tabPositions.size) {
-                            TabRowDefaults.SecondaryIndicator(
-                                Modifier.tabIndicatorOffset(tabPositions[pagerState.currentPage]),
-                                color = dynamicColors.accent
-                            )
+                HomeTabRow(
+                    currentPage = pagerState.currentPage,
+                    onTabSelected = { index ->
+                        coroutineScope.launch {
+                            pagerState.animateScrollToPage(index)
                         }
                     },
-                    divider = {}
-                ) {
-                    tabTitles.forEachIndexed { index, title ->
-                        Tab(
-                            selected = pagerState.currentPage == index,
-                            onClick = {
-                                coroutineScope.launch {
-                                    pagerState.animateScrollToPage(index)
-                                }
-                            },
-                            text = {
-                                Text(
-                                    text = title,
-                                    color = if (pagerState.currentPage == index) dynamicColors.textColor else dynamicColors.textColor.copy(alpha = 0.6f)
-                                )
-                            }
-                        )
-                    }
-                }
+                    dynamicColors = dynamicColors
+                )
 
                 Box(
                     modifier = Modifier
@@ -295,45 +232,54 @@ fun HomeScreen(
                             modifier = Modifier.fillMaxSize()
                         ) { page ->
                             when (page) {
-                                0 -> SongListTab(
-                                    songs = uiState.songs,
-                                    isSphereEffectEnabled = uiState.isSphereEffectEnabled,
-                                    searchQuery = uiState.searchQuery,
-                                    cardIdentities = cardIdentities,
-                                    onClearSearch = { viewModel.updateSearchQuery("") },
-                                    onSongClick = { song, index ->
-                                        viewModel.playbackManager.setQueue(uiState.songs, index)
-                                    },
-                                    onMenuClick = { selectedSongForMenu = it }
-                                )
-                                1 -> SongListTab(
-                                    songs = uiState.favoriteSongs,
-                                    isSphereEffectEnabled = uiState.isSphereEffectEnabled,
-                                    emptyMessage = "No tienes canciones en favoritos",
-                                    searchQuery = uiState.searchQuery,
-                                    cardIdentities = cardIdentities,
-                                    onClearSearch = { viewModel.updateSearchQuery("") },
-                                    onSongClick = { song, index ->
-                                        viewModel.playbackManager.setQueue(uiState.favoriteSongs, index)
-                                    },
-                                    onMenuClick = { selectedSongForMenu = it }
-                                )
-                                2 -> SongListTab(
-                                    songs = uiState.recentSongs,
-                                    isSphereEffectEnabled = uiState.isSphereEffectEnabled,
-                                    emptyMessage = "Sin reproducciones recientes",
-                                    searchQuery = uiState.searchQuery,
-                                    cardIdentities = cardIdentities,
-                                    onClearSearch = { viewModel.updateSearchQuery("") },
-                                    onSongClick = { song, index ->
-                                        viewModel.playbackManager.setQueue(uiState.recentSongs, index)
-                                    },
-                                    onMenuClick = { selectedSongForMenu = it }
-                                )
-                                3 -> PlaylistTab(
-                                    playlists = uiState.playlists,
-                                    onDelete = { viewModel.deletePlaylist(it.id) }
-                                )
+                                in 0..2 -> {
+                                    val (pageSongs, emptyMsg) = when (page) {
+                                        1 -> uiState.favoriteSongs to "No tienes canciones en favoritos"
+                                        2 -> uiState.recentSongs to "Sin reproducciones recientes"
+                                        else -> uiState.songs to "No hay canciones disponibles"
+                                    }
+                                    SongListTab(
+                                        songs = pageSongs,
+                                        isSphereEffectEnabled = uiState.isSphereEffectEnabled,
+                                        emptyMessage = emptyMsg,
+                                        searchQuery = uiState.searchQuery,
+                                        cardIdentities = cardIdentities,
+                                        currentSongId = playbackState.currentSong?.id,
+                                        shouldScrollToCurrentSong = shouldScrollToCurrentSong,
+                                        onScrollHandled = { viewModel.onScrollToCurrentSongHandled() },
+                                        onClearSearch = { viewModel.updateSearchQuery("") },
+                                        onSongClick = { song, index ->
+                                            viewModel.playbackManager.setQueue(pageSongs, index)
+                                        },
+                                        onMenuClick = { selectedSongForMenu = it }
+                                    )
+                                }
+                                3 -> {
+                                    if (selectedPlaylistDetail != null) {
+                                        val playlistSongs by viewModel.getSongsForPlaylist(selectedPlaylistDetail!!.id)
+                                            .collectAsStateWithLifecycle(initialValue = emptyList())
+                                        PlaylistDetailTab(
+                                            playlist = selectedPlaylistDetail!!,
+                                            songs = playlistSongs,
+                                            isSphereEffectEnabled = uiState.isSphereEffectEnabled,
+                                            searchQuery = uiState.searchQuery,
+                                            cardIdentities = cardIdentities,
+                                            onClearSearch = { viewModel.updateSearchQuery("") },
+                                            onBack = { selectedPlaylistDetail = null },
+                                            onSongClick = { song, index ->
+                                                viewModel.playbackManager.setQueue(playlistSongs, index)
+                                            },
+                                            onMenuClick = { selectedSongForMenu = it }
+                                        )
+                                    } else {
+                                        PlaylistTab(
+                                            playlists = uiState.playlists,
+                                            onCreatePlaylist = { viewModel.createPlaylist(it) },
+                                            onPlaylistClick = { selectedPlaylistDetail = it },
+                                            onDelete = { viewModel.deletePlaylist(it.id) }
+                                        )
+                                    }
+                                }
                                 4 -> {
                                     if (selectedArtistDetail != null) {
                                         ArtistDetailTab(
@@ -372,11 +318,7 @@ fun HomeScreen(
                             selectedSongForMenu?.let { viewModel.toggleFavorite(it) }
                         },
                         onAddToPlaylist = {
-                            selectedSongForMenu?.let { song ->
-                                uiState.playlists.firstOrNull()?.let { pl ->
-                                    viewModel.addSongToPlaylist(pl.id, song.id)
-                                }
-                            }
+                            songForAddToPlaylist = selectedSongForMenu
                         },
                         onDelete = {
                             selectedSongForMenu?.let { song ->
@@ -384,8 +326,146 @@ fun HomeScreen(
                             }
                         }
                     )
+
+                    if (songForAddToPlaylist != null) {
+                        val context = LocalContext.current
+                        AddToPlaylistDialog(
+                            song = songForAddToPlaylist!!,
+                            playlists = uiState.playlists,
+                            onDismiss = { songForAddToPlaylist = null },
+                            onSelectPlaylist = { playlistId, playlistName ->
+                                viewModel.addSongToPlaylist(playlistId, songForAddToPlaylist!!.id)
+                                Toast.makeText(context, "Agregada a $playlistName", Toast.LENGTH_SHORT).show()
+                                songForAddToPlaylist = null
+                            },
+                            onCreateNewPlaylist = { name ->
+                                viewModel.createPlaylist(name)
+                                Toast.makeText(context, "Playlist \"$name\" creada", Toast.LENGTH_SHORT).show()
+                                songForAddToPlaylist = null
+                            }
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun HomeSortDropdownMenu(
+    expanded: Boolean,
+    onDismissRequest: () -> Unit,
+    onSortOptionSelected: (SortOption) -> Unit,
+    containerColor: Color,
+    textColor: Color
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismissRequest,
+        containerColor = containerColor
+    ) {
+        DropdownMenuItem(
+            text = { Text("A - Z", color = textColor) },
+            onClick = { onSortOptionSelected(SortOption.A_Z) }
+        )
+        DropdownMenuItem(
+            text = { Text("Z - A", color = textColor) },
+            onClick = { onSortOptionSelected(SortOption.Z_A) }
+        )
+        DropdownMenuItem(
+            text = { Text("Más escuchadas", color = textColor) },
+            onClick = { onSortOptionSelected(SortOption.MOST_PLAYED) }
+        )
+        DropdownMenuItem(
+            text = { Text("Menos escuchadas", color = textColor) },
+            onClick = { onSortOptionSelected(SortOption.LEAST_PLAYED) }
+        )
+    }
+}
+
+@Composable
+private fun HomeSearchBar(
+    searchQuery: String,
+    onSearchQueryChange: (String) -> Unit,
+    dynamicColors: DynamicColorScheme = LocalDynamicColors.current
+) {
+    TextField(
+        value = searchQuery,
+        onValueChange = onSearchQueryChange,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 6.dp),
+        placeholder = { Text("Buscar canción o artista...", color = dynamicColors.textColor.copy(alpha = 0.6f)) },
+        leadingIcon = {
+            Icon(imageVector = Icons.Default.Search, contentDescription = "Buscar", tint = dynamicColors.iconTint)
+        },
+        trailingIcon = {
+            AnimatedVisibility(
+                visible = searchQuery.isNotEmpty(),
+                enter = fadeIn() + scaleIn(),
+                exit = fadeOut() + scaleOut()
+            ) {
+                IconButton(
+                    onClick = { onSearchQueryChange("") },
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Clear,
+                        contentDescription = "Limpiar búsqueda",
+                        tint = dynamicColors.iconTint
+                    )
+                }
+            }
+        },
+        singleLine = true,
+        shape = CircleShape,
+        colors = TextFieldDefaults.colors(
+            focusedContainerColor = dynamicColors.surface.copy(alpha = 0.5f),
+            unfocusedContainerColor = dynamicColors.surface.copy(alpha = 0.3f),
+            disabledContainerColor = dynamicColors.surface.copy(alpha = 0.2f),
+            focusedIndicatorColor = Color.Transparent,
+            unfocusedIndicatorColor = Color.Transparent,
+            disabledIndicatorColor = Color.Transparent,
+            focusedTextColor = dynamicColors.textColor,
+            unfocusedTextColor = dynamicColors.textColor
+        )
+    )
+}
+
+@Composable
+private fun HomeTabRow(
+    currentPage: Int,
+    onTabSelected: (Int) -> Unit,
+    dynamicColors: DynamicColorScheme = LocalDynamicColors.current
+) {
+    val tabTitles = listOf("Canciones", "Favoritos", "Recientes", "Playlists", "Artistas")
+
+    ScrollableTabRow(
+        selectedTabIndex = currentPage,
+        containerColor = Color.Transparent,
+        contentColor = dynamicColors.textColor,
+        edgePadding = 16.dp,
+        indicator = { tabPositions ->
+            if (currentPage < tabPositions.size) {
+                TabRowDefaults.SecondaryIndicator(
+                    Modifier.tabIndicatorOffset(tabPositions[currentPage]),
+                    color = dynamicColors.accent
+                )
+            }
+        },
+        divider = {}
+    ) {
+        tabTitles.forEachIndexed { index, title ->
+            Tab(
+                selected = currentPage == index,
+                onClick = { onTabSelected(index) },
+                text = {
+                    Text(
+                        text = title,
+                        color = if (currentPage == index) dynamicColors.textColor else dynamicColors.textColor.copy(alpha = 0.6f)
+                    )
+                }
+            )
         }
     }
 }
@@ -397,6 +477,9 @@ fun SongListTab(
     emptyMessage: String = "No hay canciones disponibles",
     searchQuery: String = "",
     cardIdentities: Map<Long, CardIdentityEntity> = emptyMap(),
+    currentSongId: Long? = null,
+    shouldScrollToCurrentSong: Boolean = false,
+    onScrollHandled: () -> Unit = {},
     onClearSearch: (() -> Unit)? = null,
     onSongClick: (Song, Int) -> Unit,
     onMenuClick: (Song) -> Unit
@@ -442,26 +525,41 @@ fun SongListTab(
         val density = LocalDensity.current
         val coroutineScope = rememberCoroutineScope()
 
-        val layoutInfo = listState.layoutInfo
-        val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
+        LaunchedEffect(shouldScrollToCurrentSong, currentSongId) {
+            if (shouldScrollToCurrentSong && currentSongId != null) {
+                val targetIndex = songs.indexOfFirst { it.id == currentSongId }
+                if (targetIndex != -1) {
+                    val currentIndex = listState.firstVisibleItemIndex
+                    if (abs(targetIndex - currentIndex) > 8) {
+                        val intermediateIndex = if (targetIndex > currentIndex) targetIndex - 2 else targetIndex + 2
+                        listState.scrollToItem(intermediateIndex)
+                    }
+                    val currentLayoutInfo = listState.layoutInfo
+                    val viewportHeight = currentLayoutInfo.viewportEndOffset - currentLayoutInfo.viewportStartOffset
+                    val itemHeight = currentLayoutInfo.visibleItemsInfo.find { it.index == targetIndex }?.size
+                        ?: currentLayoutInfo.visibleItemsInfo.firstOrNull()?.size
+                        ?: 0
+                    val centerOffset = (viewportHeight - itemHeight) / 2
+                    listState.animateScrollToItem(targetIndex, scrollOffset = -centerOffset)
+                }
+                onScrollHandled()
+            }
+        }
 
-        var previousScrollOffset by remember { mutableStateOf(0) }
-        var isFastScrolling by remember { mutableStateOf(false) }
-
-        val currentScrollOffset = listState.firstVisibleItemIndex * 1000 + listState.firstVisibleItemScrollOffset
-        val scrollDelta = abs(currentScrollOffset - previousScrollOffset)
-        previousScrollOffset = currentScrollOffset
-
-        isFastScrolling = listState.isScrollInProgress && scrollDelta > 120
-
-        val closestIndex = if (!isFastScrolling && layoutInfo.viewportEndOffset > 0 && layoutInfo.visibleItemsInfo.isNotEmpty()) {
-            layoutInfo.visibleItemsInfo.minWithOrNull(
-                compareBy<LazyListItemInfo> { item ->
-                    val itemCenter = item.offset + item.size / 2f
-                    abs(viewportCenter - itemCenter)
-                }.thenBy { item -> item.index }
-            )?.index ?: -1
-        } else -1
+        val centeredIndex by remember {
+            derivedStateOf {
+                val layoutInfo = listState.layoutInfo
+                if (listState.isScrollInProgress || layoutInfo.viewportEndOffset <= 0 || layoutInfo.visibleItemsInfo.isEmpty()) {
+                    -1
+                } else {
+                    val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
+                    layoutInfo.visibleItemsInfo.minByOrNull { item ->
+                        val itemCenter = item.offset + item.size / 2f
+                        abs(viewportCenter - itemCenter)
+                    }?.index ?: -1
+                }
+            }
+        }
 
         Column(modifier = Modifier.fillMaxSize()) {
             if (searchQuery.isNotBlank()) {
@@ -483,12 +581,14 @@ fun SongListTab(
                     contentType = { "song_card" }
                 ) { index ->
                     val song = songs[index]
-                    val isCentered = (index == closestIndex)
+                    val isCentered = (index == centeredIndex)
 
                     val itemModifier = if (isSphereEffectEnabled) {
                         Modifier.graphicsLayer {
+                            val layoutInfo = listState.layoutInfo
                             val visibleItem = layoutInfo.visibleItemsInfo.find { it.index == index }
                             if (visibleItem != null && layoutInfo.viewportEndOffset > 0) {
+                                val viewportCenter = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2f
                                 val itemCenter = visibleItem.offset + visibleItem.size / 2f
                                 val distanceFromCenter = abs(viewportCenter - itemCenter)
                                 val maxDistance = layoutInfo.viewportEndOffset / 2f
@@ -536,44 +636,271 @@ fun SongListTab(
 @Composable
 fun PlaylistTab(
     playlists: List<Playlist>,
+    onCreatePlaylist: (String) -> Unit,
+    onPlaylistClick: (Playlist) -> Unit,
     onDelete: (Playlist) -> Unit
 ) {
     val dynamicColors = LocalDynamicColors.current
-    if (playlists.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No has creado listas de reproducción", style = MaterialTheme.typography.bodyLarge, color = dynamicColors.textColor.copy(alpha = 0.7f))
-        }
-    } else {
-        LazyColumn(modifier = Modifier.fillMaxSize()) {
-            items(playlists, key = { it.id }) { playlist ->
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = dynamicColors.surface.copy(alpha = 0.5f))
-                ) {
-                    Row(
+    var showCreateDialog by remember { mutableStateOf(false) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        if (playlists.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text("No has creado listas de reproducción", style = MaterialTheme.typography.bodyLarge, color = dynamicColors.textColor.copy(alpha = 0.7f))
+            }
+        } else {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(playlists, key = { it.id }) { playlist ->
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                            .clickable { onPlaylistClick(playlist) },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = dynamicColors.surface.copy(alpha = 0.5f))
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null, modifier = Modifier.size(32.dp), tint = dynamicColors.iconTint)
-                        Spacer(modifier = Modifier.width(16.dp))
-                        Text(
-                            text = playlist.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.weight(1f),
-                            color = dynamicColors.textColor
-                        )
-                        IconButton(onClick = { onDelete(playlist) }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Eliminar Playlist", tint = dynamicColors.iconTint)
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.AutoMirrored.Filled.PlaylistPlay, contentDescription = null, modifier = Modifier.size(32.dp), tint = dynamicColors.iconTint)
+                            Spacer(modifier = Modifier.width(16.dp))
+                            Text(
+                                text = playlist.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                modifier = Modifier.weight(1f),
+                                color = dynamicColors.textColor
+                            )
+                            IconButton(onClick = { onDelete(playlist) }) {
+                                Icon(Icons.Default.Delete, contentDescription = "Eliminar Playlist", tint = dynamicColors.iconTint)
+                            }
                         }
                     }
                 }
             }
         }
+
+        FloatingActionButton(
+            onClick = { showCreateDialog = true },
+            containerColor = dynamicColors.accent,
+            contentColor = Color.Black,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(24.dp)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = "Crear Playlist")
+        }
+
+        if (showCreateDialog) {
+            CreatePlaylistDialog(
+                onDismiss = { showCreateDialog = false },
+                onCreate = { name ->
+                    onCreatePlaylist(name)
+                    showCreateDialog = false
+                }
+            )
+        }
+    }
+}
+
+@Composable
+fun PlaylistDetailTab(
+    playlist: Playlist,
+    songs: List<Song>,
+    isSphereEffectEnabled: Boolean = true,
+    searchQuery: String = "",
+    cardIdentities: Map<Long, CardIdentityEntity> = emptyMap(),
+    onClearSearch: (() -> Unit)? = null,
+    onBack: () -> Unit,
+    onSongClick: (Song, Int) -> Unit,
+    onMenuClick: (Song) -> Unit
+) {
+    val dynamicColors = LocalDynamicColors.current
+    Column(modifier = Modifier.fillMaxSize()) {
+        TextButton(onClick = onBack, modifier = Modifier.padding(8.dp)) {
+            Text("← Volver a Playlists", color = dynamicColors.accent)
+        }
+        Text(
+            text = playlist.name,
+            style = MaterialTheme.typography.headlineMedium,
+            color = dynamicColors.textColor,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
+        SongListTab(
+            songs = songs,
+            isSphereEffectEnabled = isSphereEffectEnabled,
+            emptyMessage = "Esta lista de reproducción no tiene canciones",
+            searchQuery = searchQuery,
+            cardIdentities = cardIdentities,
+            onClearSearch = onClearSearch,
+            onSongClick = onSongClick,
+            onMenuClick = onMenuClick
+        )
+    }
+}
+
+@Composable
+private fun CreatePlaylistDialog(
+    onDismiss: () -> Unit,
+    onCreate: (String) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    val dynamicColors = LocalDynamicColors.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = dynamicColors.surface,
+        title = {
+            Text("Nueva Playlist", color = dynamicColors.textColor, style = MaterialTheme.typography.titleLarge)
+        },
+        text = {
+            OutlinedTextField(
+                value = name,
+                onValueChange = { name = it },
+                label = { Text("Nombre de la playlist", color = dynamicColors.textColor.copy(alpha = 0.7f)) },
+                singleLine = true,
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = dynamicColors.accent,
+                    unfocusedBorderColor = dynamicColors.textColor.copy(alpha = 0.3f),
+                    focusedTextColor = dynamicColors.textColor,
+                    unfocusedTextColor = dynamicColors.textColor
+                ),
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (name.isNotBlank()) onCreate(name.trim())
+                },
+                enabled = name.isNotBlank()
+            ) {
+                Text("Crear", color = if (name.isNotBlank()) dynamicColors.accent else dynamicColors.textColor.copy(alpha = 0.3f))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancelar", color = dynamicColors.textColor.copy(alpha = 0.7f))
+            }
+        }
+    )
+}
+
+@Composable
+private fun AddToPlaylistDialog(
+    song: Song,
+    playlists: List<Playlist>,
+    onDismiss: () -> Unit,
+    onSelectPlaylist: (Long, String) -> Unit,
+    onCreateNewPlaylist: (String) -> Unit
+) {
+    val dynamicColors = LocalDynamicColors.current
+    var showCreateDialog by remember { mutableStateOf(false) }
+
+    if (showCreateDialog) {
+        CreatePlaylistDialog(
+            onDismiss = { showCreateDialog = false },
+            onCreate = { name ->
+                onCreateNewPlaylist(name)
+                showCreateDialog = false
+            }
+        )
+    } else {
+        AlertDialog(
+            onDismissRequest = onDismiss,
+            containerColor = dynamicColors.surface,
+            title = {
+                Column {
+                    Text("Agregar a playlist", color = dynamicColors.textColor, style = MaterialTheme.typography.titleLarge)
+                    Text(
+                        song.title,
+                        color = dynamicColors.textColor.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1
+                    )
+                }
+            },
+            text = {
+                if (playlists.isEmpty()) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "No tienes listas de reproducción.",
+                            color = dynamicColors.textColor.copy(alpha = 0.7f),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        TextButton(onClick = { showCreateDialog = true }) {
+                            Icon(Icons.Default.Add, contentDescription = null, tint = dynamicColors.accent)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Crear nueva playlist", color = dynamicColors.accent)
+                        }
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 280.dp)
+                    ) {
+                        items(playlists, key = { it.id }) { playlist ->
+                            Card(
+                                onClick = { onSelectPlaylist(playlist.id, playlist.name) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = CardDefaults.cardColors(containerColor = dynamicColors.background.copy(alpha = 0.4f))
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.PlaylistPlay,
+                                        contentDescription = null,
+                                        tint = dynamicColors.iconTint,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        playlist.name,
+                                        color = dynamicColors.textColor,
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        }
+                        item {
+                            TextButton(
+                                onClick = { showCreateDialog = true },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = dynamicColors.accent)
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Crear nueva playlist", color = dynamicColors.accent)
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = onDismiss) {
+                    Text("Cancelar", color = dynamicColors.textColor.copy(alpha = 0.7f))
+                }
+            }
+        )
     }
 }
 

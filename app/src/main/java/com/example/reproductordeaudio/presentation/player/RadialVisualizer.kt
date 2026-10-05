@@ -24,14 +24,16 @@ fun RadialVisualizer(
     Canvas(modifier = modifier.size(size)) {
         val amplitudes = amplitudesProvider()
         val center = Offset(size.toPx() / 2f, size.toPx() / 2f)
-        val bandCount = amplitudes.size.coerceAtMost(128)
-        if (bandCount == 0) return@Canvas
+        val activeCount = amplitudes.size
+        if (activeCount == 0) return@Canvas
 
-        val angleStep = (2 * Math.PI / bandCount).toFloat()
+        val totalBars = activeCount * 2
+        val angleStep = (2 * Math.PI / totalBars).toFloat()
 
-        for (i in 0 until bandCount) {
+        for (i in 0 until totalBars) {
             val angle = i * angleStep - (Math.PI / 2).toFloat()
-            val amp = amplitudes[i].coerceIn(0.05f, 1f)
+            val ampIndex = if (i < activeCount) i else (totalBars - 1 - i)
+            val amp = amplitudes.getOrElse(ampIndex) { 0.05f }.coerceIn(0.05f, 1f)
             val barLength = maxBarLengthPx * amp
 
             val startX = center.x + innerRadiusPx * cos(angle)

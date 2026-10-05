@@ -8,6 +8,8 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.core.graphics.ColorUtils
 import com.example.reproductordeaudio.data.local.db.CardIdentityEntity
 import com.example.reproductordeaudio.domain.model.Song
 
@@ -49,9 +51,26 @@ fun ProvideDynamicColors(
             val bg = parsedColors[0]
             val surf = parsedColors.getOrElse(1) { bg }
             val acc = parsedColors.getOrElse(2) { surf }
-            val iconT = parsedColors.getOrElse(3) { acc }
+            val initialIconTint = parsedColors.getOrElse(3) { acc }
             val high = parsedColors.last()
-            val text = Color(identity.textColorArgb)
+            val rawText = Color(identity.textColorArgb)
+
+            val bgArgb = bg.toArgb()
+            val lightestColor = parsedColors.maxByOrNull { ColorUtils.calculateLuminance(it.toArgb()) } ?: Color.White
+
+            fun ensureLegibleContrast(candidate: Color): Color {
+                val contrast = ColorUtils.calculateContrast(candidate.toArgb(), bgArgb)
+                if (contrast >= 4.5) return candidate
+
+                val lightestContrast = ColorUtils.calculateContrast(lightestColor.toArgb(), bgArgb)
+                if (lightestContrast >= 4.5) return lightestColor
+
+                val bgLuminance = ColorUtils.calculateLuminance(bgArgb)
+                return if (bgLuminance < 0.5) Color.White else Color.Black
+            }
+
+            val text = ensureLegibleContrast(rawText)
+            val iconT = ensureLegibleContrast(initialIconTint)
 
             DynamicColorScheme(
                 background = bg,

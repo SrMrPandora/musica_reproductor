@@ -63,6 +63,7 @@ class MainActivity : ComponentActivity() {
                         PlayerScreen(
                             viewModel = homeViewModel,
                             onBackClick = {
+                                homeViewModel.triggerScrollToCurrentSong()
                                 if (navController.previousBackStackEntry != null) {
                                     navController.popBackStack()
                                 } else {

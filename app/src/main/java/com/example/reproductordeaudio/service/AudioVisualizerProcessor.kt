@@ -11,7 +11,7 @@ import kotlin.math.pow
 class AudioVisualizerProcessor private constructor() {
 
     private var visualizer: Visualizer? = null
-    private val bandCount = 64
+    private val bandCount = 32
     private val rawAmplitudes = FloatArray(bandCount)
     private val smoothedAmplitudes = FloatArray(bandCount)
 
@@ -102,6 +102,7 @@ class AudioVisualizerProcessor private constructor() {
         if (n <= 2) return
 
         val maxIndex = n / 2
+        val usefulMaxIndex = (maxIndex * 0.45).toInt().coerceAtLeast(1)
         val magnitudes = FloatArray(maxIndex)
 
         // Magnitudes FFT
@@ -112,10 +113,10 @@ class AudioVisualizerProcessor private constructor() {
             magnitudes[k] = hypot(r, i)
         }
 
-        // Mapeo logarítmico para distribución musical (Graves, Medios, Agudos)
+        // Mapeo logarítmico para distribución musical en rango activo (0 Hz - ~10 kHz)
         for (i in 0 until bandCount) {
-            val minBin = (maxIndex * (2.0.pow(i.toDouble() / bandCount) - 1.0) / 1.0).toInt().coerceIn(0, maxIndex - 1)
-            val maxBin = (maxIndex * (2.0.pow((i + 1).toDouble() / bandCount) - 1.0) / 1.0).toInt().coerceIn(minBin + 1, maxIndex)
+            val minBin = (usefulMaxIndex * (2.0.pow(i.toDouble() / bandCount) - 1.0)).toInt().coerceIn(0, usefulMaxIndex - 1)
+            val maxBin = (usefulMaxIndex * (2.0.pow((i + 1).toDouble() / bandCount) - 1.0)).toInt().coerceIn(minBin + 1, usefulMaxIndex)
 
             var sum = 0f
             var count = 0

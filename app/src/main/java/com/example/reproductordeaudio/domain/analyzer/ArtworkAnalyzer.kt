@@ -35,12 +35,9 @@ class ArtworkAnalyzer(private val context: Context) {
         val bitmap = loadBitmapFromUri(artworkUri) ?: return@withContext getDefaultPalette()
         val palette = Palette.from(bitmap).generate()
 
-        val defaultColor = 0xFF212121.toInt()
-        val defaultAccent = 0xFFFF4081.toInt()
-
-        val dominantColorInt = palette.getDominantColor(defaultColor)
-        val vibrantColorInt = palette.getVibrantColor(palette.getMutedColor(defaultAccent))
-        val darkMutedColorInt = palette.getDarkMutedColor(palette.getDarkVibrantColor(defaultColor))
+        val dominantColorInt = palette.getDominantColor(DEFAULT_DARK_COLOR)
+        val vibrantColorInt = palette.getVibrantColor(palette.getMutedColor(DEFAULT_ACCENT_COLOR))
+        val darkMutedColorInt = palette.getDarkMutedColor(palette.getDarkVibrantColor(DEFAULT_DARK_COLOR))
 
         val primaryColor = Color(dominantColorInt)
         val secondaryColor = Color(vibrantColorInt)
@@ -65,18 +62,14 @@ class ArtworkAnalyzer(private val context: Context) {
             .sortedByDescending { it.population }
             .take(5)
 
-        val swatches = if (topSwatches.isEmpty()) {
-            listOf(Color(0xFF212121), Color(0xFF121212))
-        } else {
-            topSwatches
-                .map { Color(it.rgb) }
-                .sortedBy { ColorUtils.calculateLuminance(it.toArgb()) }
-        }
+        val swatches = topSwatches
+            .map { Color(it.rgb) }
+            .sortedBy { ColorUtils.calculateLuminance(it.toArgb()) }
 
-        val gradientColors = if (swatches.size == 1) {
-            listOf(swatches.first(), swatches.first())
-        } else {
-            swatches
+        val gradientColors = when {
+            swatches.isEmpty() -> DEFAULT_CARD_GRADIENT
+            swatches.size == 1 -> listOf(swatches.first(), swatches.first())
+            else -> swatches
         }
 
         val lastColorArgb = gradientColors.last().toArgb()
@@ -91,23 +84,28 @@ class ArtworkAnalyzer(private val context: Context) {
 
     fun loadBitmapFromUri(uriString: String): Bitmap? {
         val uri = Uri.parse(uriString)
+        return loadEmbeddedPicture(uri) ?: loadStreamBitmap(uri)
+    }
+
+    private fun loadEmbeddedPicture(uri: Uri): Bitmap? {
         val retriever = MediaMetadataRetriever()
-        try {
+        return try {
             retriever.setDataSource(context, uri)
-            val pictureBytes = retriever.embeddedPicture
-            if (pictureBytes != null) {
-                return BitmapFactory.decodeByteArray(pictureBytes, 0, pictureBytes.size)
+            retriever.embeddedPicture?.let { bytes ->
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
             }
         } catch (e: Exception) {
-            // Fallback
+            null
         } finally {
             try {
                 retriever.release()
             } catch (e: Exception) {
-                e.printStackTrace()
+                // Ignored
             }
         }
+    }
 
+    private fun loadStreamBitmap(uri: Uri): Bitmap? {
         return try {
             context.contentResolver.openInputStream(uri)?.use { stream ->
                 BitmapFactory.decodeStream(stream)
@@ -121,8 +119,9 @@ class ArtworkAnalyzer(private val context: Context) {
         val accentArgb = accentColor.toArgb()
         val bgArgb = backgroundColor.toArgb()
 
-        val contrastRatio = ColorUtils.calculateContrast(accentArgb, bgArgb)
-        if (contrastRatio >= 3.0) return accentColor
+        if (ColorUtils.calculateContrast(accentArgb, bgArgb) >= 3.0) {
+            return accentColor
+        }
 
         val hsl = FloatArray(3)
         ColorUtils.colorToHSL(accentArgb, hsl)
@@ -135,8 +134,7 @@ class ArtworkAnalyzer(private val context: Context) {
             hsl[2] = (hsl[2] - 0.3f).coerceAtLeast(0.1f)
         }
 
-        val adjustedArgb = ColorUtils.HSLToColor(hsl)
-        return Color(adjustedArgb)
+        return Color(ColorUtils.HSLToColor(hsl))
     }
 
     private fun getDefaultPalette(): ArtworkPalette {
@@ -148,3 +146,7 @@ class ArtworkAnalyzer(private val context: Context) {
         )
     }
 }
+
+private const val DEFAULT_DARK_COLOR = 0xFF212121.toInt()
+private const val DEFAULT_ACCENT_COLOR = 0xFFFF4081.toInt()
+private val DEFAULT_CARD_GRADIENT = listOf(Color(0xFF212121), Color(0xFF121212))

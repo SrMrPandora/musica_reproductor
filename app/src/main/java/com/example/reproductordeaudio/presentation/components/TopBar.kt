@@ -1,10 +1,16 @@
 package com.example.reproductordeaudio.presentation.components
 
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Casino
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -13,6 +19,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.text.font.FontWeight
 import com.example.reproductordeaudio.ui.theme.LocalDynamicColors
 
@@ -24,9 +33,21 @@ fun TopBar(
     onSortClick: (() -> Unit)? = null,
     onShuffleClick: (() -> Unit)? = null,
     onSphereToggleClick: (() -> Unit)? = null,
-    isSphereEffectEnabled: Boolean = true
+    isSphereEffectEnabled: Boolean = true,
+    isSyncing: Boolean = false
 ) {
     val dynamicColors = LocalDynamicColors.current
+
+    val infiniteTransition = rememberInfiniteTransition(label = "SyncRotationTransition")
+    val rotationAngle by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "SyncRotationAngle"
+    )
 
     TopAppBar(
         title = {
@@ -49,8 +70,8 @@ fun TopBar(
             if (onShuffleClick != null) {
                 IconButton(onClick = onShuffleClick) {
                     Icon(
-                        imageVector = Icons.Default.Shuffle,
-                        contentDescription = "Shuffle",
+                        imageVector = Icons.Default.Casino,
+                        contentDescription = "Canción Aleatoria",
                         tint = dynamicColors.iconTint
                     )
                 }
@@ -64,11 +85,15 @@ fun TopBar(
                     )
                 }
             }
-            IconButton(onClick = onSyncClick) {
+            IconButton(
+                onClick = onSyncClick,
+                enabled = !isSyncing
+            ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Actualizar Biblioteca",
-                    tint = dynamicColors.iconTint
+                    tint = if (isSyncing) dynamicColors.textColor.copy(alpha = 0.5f) else dynamicColors.iconTint,
+                    modifier = if (isSyncing) Modifier.rotate(rotationAngle) else Modifier
                 )
             }
         },
