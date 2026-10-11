@@ -7,6 +7,9 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <uses-permission
+        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+        android:maxSdkVersion="28" />
 
     <!-- Permisos de Red y Actualizaciones -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -20,6 +23,7 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
     <application
+        android:name=".MainApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

@@ -19,6 +19,8 @@ import com.example.reproductordeaudio.data.local.EmbeddedArtworkFetcher
 import com.example.reproductordeaudio.presentation.home.HomeScreen
 import com.example.reproductordeaudio.presentation.home.HomeViewModel
 import com.example.reproductordeaudio.presentation.player.PlayerScreen
+import com.example.reproductordeaudio.presentation.settings.SettingsScreen
+import com.example.reproductordeaudio.presentation.test.YtDlpTestScreen
 import com.example.reproductordeaudio.ui.theme.ReproductorDeAudioTheme
 
 class MainActivity : ComponentActivity() {
@@ -56,7 +58,9 @@ class MainActivity : ComponentActivity() {
                     composable("home") {
                         HomeScreen(
                             viewModel = homeViewModel,
-                            onSongClick = { navController.navigate("player") }
+                            onSongClick = { navController.navigate("player") },
+                            onYtDlpTestClick = { navController.navigate("ytdlp_test") },
+                            onSettingsClick = { navController.navigate("settings") }
                         )
                     }
                     composable("player") {
@@ -72,6 +76,17 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+                        )
+                    }
+                    composable("ytdlp_test") {
+                        YtDlpTestScreen(
+                            viewModel = homeViewModel,
+                            onBack = { navController.popBackStack() }
+                        )
+                    }
+                    composable("settings") {
+                        SettingsScreen(
+                            onBack = { navController.popBackStack() }
                         )
                     }
                 }

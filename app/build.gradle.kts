@@ -12,10 +12,19 @@ android {
         applicationId = "com.example.reproductordeaudio"
         minSdk = 24
         targetSdk = 35
-        versionCode = 3
-        versionName = "2.6"
+        versionCode = 4
+        versionName = "2.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     buildTypes {
@@ -72,6 +81,13 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.androidx.palette.ktx)
     implementation(libs.haze)
+
+    // DataStore
+    implementation("androidx.datastore:datastore-preferences:1.1.2")
+
+    // yt-dlp
+    implementation("io.github.junkfood02.youtubedl-android:library:0.18.1")
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:0.18.1")
 
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

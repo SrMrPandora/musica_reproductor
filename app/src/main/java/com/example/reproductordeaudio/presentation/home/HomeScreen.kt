@@ -102,7 +102,9 @@ import kotlin.math.abs
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel,
-    onSongClick: () -> Unit
+    onSongClick: () -> Unit,
+    onYtDlpTestClick: () -> Unit = {},
+    onSettingsClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val playbackState by viewModel.playbackManager.playbackState.collectAsStateWithLifecycle()
@@ -166,6 +168,8 @@ fun HomeScreen(
                             }
                         },
                         onSphereToggleClick = { viewModel.toggleSphereEffect() },
+                        onTestClick = onYtDlpTestClick,
+                        onSettingsClick = onSettingsClick,
                         isSphereEffectEnabled = uiState.isSphereEffectEnabled,
                         isSyncing = uiState.isLoading
                     )
